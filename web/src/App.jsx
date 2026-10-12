@@ -9,14 +9,19 @@ const refreshDischargeAnalytics = async () => {
         setDischargeError("");
 
         const response = await fetch(
-            "http://localhost:5000/api/analytics/refresh-discharges",
+            "http://localhost:5000/api/analytics/discharges/refresh",
             {
                 method: "POST"
             }
         );
 
         if (!response.ok) {
-            throw new Error("Failed to refresh materialized view");
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.details ||
+                errorData.error ||
+                "Failed to refresh materialized view"
+            );
         }
 
         // Fetch the updated materialized view
@@ -32,12 +37,12 @@ const refreshDischargeAnalytics = async () => {
 
         setDischargeData(data.summary);
 
-} catch (error) {
-    console.error(error);
+    } catch (error) {
+        console.error("Discharge refresh error:", error);
 
-    setDischargeError(
-        error.message || "Failed to refresh discharge analytics"
-    );
+        setDischargeError(
+            error.message || "Failed to refresh discharge analytics"
+        );
 
     } finally {
         setDischargeLoading(false);

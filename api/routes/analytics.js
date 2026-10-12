@@ -98,4 +98,23 @@ router.get("/discharges", async (req, res) => {
     }
 });
 
+router.post("/discharges/refresh", async (req, res) => {
+    try {
+        await pool.query(
+            "REFRESH MATERIALIZED VIEW public.mv_clinic_monthly_discharges"
+        );
+
+        res.json({
+            message: "Monthly discharge summary refreshed successfully"
+        });
+    } catch (error) {
+        console.error("Discharge refresh error:", error);
+
+        res.status(500).json({
+            error: "Failed to refresh materialized view",
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
