@@ -11,6 +11,7 @@ const nearestNurse = db.NursePings.aggregate([
                 coordinates: [patientLongitude, patientLatitude]
             },
             distanceField: "distance_meters",
+            maxDistance: 5000,
             spherical: true,
             query: { is_active: true },
             key: "location"

@@ -56,7 +56,7 @@ def seed_nurse_pings(db):
         ops = []
         for _ in range(batch_n):
             # Recent timestamps so a meaningful fraction survive the 2hr TTL
-            created_at = datetime.utcnow() - timedelta(seconds=random.randint(0, 3600 * 4))
+            created_at = datetime.utcnow() - timedelta(seconds=random.randint(0, 300))
             doc = {
                 "nurse_id": random.choice(nurse_ids),
                 "location": random_point(),
@@ -118,14 +118,12 @@ def seed_medical_catalogs(db):
 
 def main():
     client = MongoClient(MONGO_URI)
-    db = client[DB_NAME]
-
-    seed_nurse_pings(db)
-    seed_patient_reviews(db)
-    seed_medical_catalogs(db)
-
-    print("Done.")
-    client.close()
+    try:
+        db = client[DB_NAME]
+        seed_nurse_pings(db)
+        print("NursePings seeding completed.")
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":

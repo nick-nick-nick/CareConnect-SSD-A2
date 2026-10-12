@@ -146,6 +146,67 @@ const refreshDischargeAnalytics = async () => {
     // FETCH PATIENTS
     // =========================
 
+    const [reviewData, setReviewData] = useState(null);
+    const [catalogData, setCatalogData] = useState([]);
+    const [reviewsLoading, setReviewsLoading] = useState(false);
+    const [reviewsError, setReviewsError] = useState("");
+
+    const [nurseData, setNurseData] = useState([]);
+    const [mapLatitude, setMapLatitude] = useState("13.0827");
+    const [mapLongitude, setMapLongitude] = useState("80.2707");
+    const [mapLoading, setMapLoading] = useState(false);
+    const [mapError, setMapError] = useState("");
+
+    useEffect(() => {
+    if (view !== "map") return;
+
+    let cancelled = false;
+
+    const fetchNurses = async () => {
+        try {
+            setMapLoading(true);
+            setMapError("");
+
+            const params = new URLSearchParams({
+                latitude: mapLatitude,
+                longitude: mapLongitude,
+                limit: "20"
+            });
+
+            const response = await fetch(
+                `http://localhost:5000/api/map/nearest-nurses?${params}`
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch nearby nurses");
+            }
+
+            const data = await response.json();
+
+            if (!cancelled) {
+                setNurseData(data.nurses || []);
+            }
+        } catch (error) {
+            if (!cancelled) {
+                setMapError(error.message || "Failed to load nearby nurses");
+            }
+        } finally {
+            if (!cancelled) {
+                setMapLoading(false);
+            }
+        }
+    };
+
+    fetchNurses();
+
+    const intervalId = setInterval(fetchNurses, 10000);
+
+    return () => {
+        cancelled = true;
+        clearInterval(intervalId);
+    };
+}, [view, mapLatitude, mapLongitude]);
+
 useEffect(() => {
     if (view !== "analytics") {
         return;
@@ -205,6 +266,58 @@ useEffect(() => {
     fetchAnalytics();
 
 }, [view]);
+
+
+useEffect(() => {
+    if (view !== "reviews") return;
+
+    let cancelled = false;
+
+    const fetchReviews = async () => {
+        try {
+            setReviewsLoading(true);
+            setReviewsError("");
+
+            const [analyticsResponse, catalogsResponse] =
+                await Promise.all([
+                    fetch("http://localhost:5000/api/reviews/analytics"),
+                    fetch("http://localhost:5000/api/reviews/catalogs")
+                ]);
+
+            if (!analyticsResponse.ok) {
+                throw new Error("Failed to fetch review analytics");
+            }
+
+            if (!catalogsResponse.ok) {
+                throw new Error("Failed to fetch medical catalogs");
+            }
+
+            const analytics = await analyticsResponse.json();
+            const catalogs = await catalogsResponse.json();
+
+            if (!cancelled) {
+                setReviewData(analytics);
+                setCatalogData(catalogs.catalogs || []);
+            }
+        } catch (err) {
+            if (!cancelled) {
+                console.error("Reviews loading error:", err);
+                setReviewsError(err.message || "Failed to load reviews");
+            }
+        } finally {
+            if (!cancelled) {
+                setReviewsLoading(false);
+            }
+        }
+    };
+
+    fetchReviews();
+
+    return () => {
+        cancelled = true;
+    };
+}, [view]);
+
 
     useEffect(() => {
         if (view !== "patients") return;
@@ -930,6 +1043,23 @@ useEffect(() => {
                     >
                         Analytics
                     </button>
+
+                    <button
+                        className={`nav-button ${view === "reviews" ? "active" : ""}`}
+                        onClick={() => setView("reviews")}
+                    >
+                        Reviews
+                    </button>
+
+
+                    <button
+                        className={`nav-button ${view === "map" ? "active" : ""}`}
+                        onClick={() => setView("map")}
+                    >
+                        Map
+                    </button>
+
+
 
                 </div>
             </div>
@@ -1742,7 +1872,7 @@ useEffect(() => {
                                                 }
                                             >
                                                 {patient.name}
-                                                {" — HSA $"}
+                                                {" â€” HSA $"}
                                                 {Number(
                                                     patient.hsa_balance
                                                 ).toFixed(
@@ -1803,7 +1933,7 @@ useEffect(() => {
                                                 {
                                                     clinic.name
                                                 }
-                                                {" — "}
+                                                {" â€” "}
                                                 {
                                                     clinic.is_accepting_patients
                                                         ? "Accepting patients"
@@ -2143,7 +2273,7 @@ useEffect(() => {
                                                 {
                                                     patient.name
                                                 }
-                                                {" — HSA $"}
+                                                {" â€” HSA $"}
                                                 {Number(
                                                     patient.hsa_balance
                                                 ).toFixed(
@@ -2456,7 +2586,7 @@ useEffect(() => {
                                             </td>
 
                                             <td>
-                                                ₹
+                                                â‚¹
                                                 {Number(
                                                     row.daily_revenue
                                                 ).toFixed(2)}
@@ -2464,7 +2594,7 @@ useEffect(() => {
 
                                             <td>
                                                 <strong>
-                                                    ₹
+                                                    â‚¹
                                                     {Number(
                                                         row.moving_7_day_average
                                                     ).toFixed(2)}
@@ -2592,6 +2722,235 @@ useEffect(() => {
             )}
     </div>
 )}
+
+
+{view === "reviews" && (
+    <div className="section">
+        <h2>Patient Reviews</h2>
+
+        {reviewsLoading && (
+            <div className="empty">Loading reviews...</div>
+        )}
+
+        {reviewsError && (
+            <div className="error">{reviewsError}</div>
+        )}
+
+        {!reviewsLoading && !reviewsError && reviewData && (
+            <>
+                <div className="analytics-summary">
+                    <h3>Overall Rating</h3>
+                    <p>
+                        Average rating:{" "}
+                        <strong>
+                            {reviewData.global_average?.[0]?.avg_rating ?? "N/A"}
+                            {" / 5"}
+                        </strong>
+                    </p>
+                    <p>
+                        Total reviews:{" "}
+                        <strong>
+                            {reviewData.global_average?.[0]?.total_reviews ?? 0}
+                        </strong>
+                    </p>
+                </div>
+
+                <h3>Rating Distribution</h3>
+
+                {reviewData.rating_buckets?.length > 0 ? (
+                    <table className="patient-table">
+                        <thead>
+                            <tr>
+                                <th>Rating</th>
+                                <th>Number of Reviews</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {reviewData.rating_buckets.map((item) => (
+                                <tr key={item._id}>
+                                    <td>{item._id} / 5</td>
+                                    <td>{item.count}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <div className="empty">No ratings available.</div>
+                )}
+
+                <h3>Top Review Tags</h3>
+
+                {reviewData.top_sentiment_tags?.length > 0 ? (
+                    <table className="patient-table">
+                        <thead>
+                            <tr>
+                                <th>Tag</th>
+                                <th>Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {reviewData.top_sentiment_tags.map((item) => (
+                                <tr key={item._id}>
+                                    <td>{item._id.replaceAll("_", " ")}</td>
+                                    <td>{item.count}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <div className="empty">No review tags available.</div>
+                )}
+            </>
+        )}
+
+        <h3>Medical Catalogs</h3>
+
+        {!reviewsLoading && !reviewsError && catalogData.length === 0 ? (
+            <div className="empty">No medical catalog documents found.</div>
+        ) : (
+            <div className="analytics-table-container">
+                <table className="patient-table">
+                    <thead>
+                        <tr>
+                            <th>Clinic ID</th>
+                            <th>Type</th>
+                            <th>Document Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {catalogData.map((item) => (
+                            <tr key={item._id}>
+                                <td>{item.clinic_id}</td>
+                                <td>{item.type}</td>
+                                <td>
+                                    <pre style={{
+                                        whiteSpace: "pre-wrap",
+                                        overflowWrap: "anywhere",
+                                        margin: 0
+                                    }}>
+                                        {JSON.stringify(
+                                            Object.fromEntries(
+                                                Object.entries(item).filter(
+                                                    ([key]) => key !== "_id"
+                                                )
+                                            ),
+                                            null,
+                                            2
+                                        )}
+                                    </pre>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )}
+    </div>
+)}
+
+
+{view === "map" && (
+    <div className="section">
+        <h2>Nearby Nurses</h2>
+        <p>Find active nurses within 5 km of a selected location.</p>
+
+        <div className="form-row">
+            <label>
+                Latitude
+                <input
+                    type="number"
+                    min="-90"
+                    max="90"
+                    step="any"
+                    value={mapLatitude}
+                    onChange={(e) => setMapLatitude(e.target.value)}
+                />
+            </label>
+
+            <label>
+                Longitude
+                <input
+                    type="number"
+                    min="-180"
+                    max="180"
+                    step="any"
+                    value={mapLongitude}
+                    onChange={(e) => setMapLongitude(e.target.value)}
+                />
+            </label>
+        </div>
+
+
+        <p>
+            Search radius: <strong>5 km</strong>
+            {" Â· "}Auto-refresh: <strong>10 seconds</strong>
+        </p>
+
+        <p className="warning">
+            Nurse locations are based on stored pings. Check each last-ping
+            timestamp before treating a location as current.
+        </p>
+
+
+        {mapLoading && <p>Loading nearby nurses...</p>}
+
+        {mapError && <div className="error">{mapError}</div>}
+
+        {!mapError && (
+            <>
+                <h3>Nearby nurses ({nurseData.length})</h3>
+
+                {nurseData.length === 0 && !mapLoading ? (
+                    <div className="empty">
+                        No active nurses found within 5 km.
+                    </div>
+                ) : (
+                    <div className="analytics-table-container">
+                        <table className="patient-table">
+                            <thead>
+                                <tr>
+                                    <th>Nurse ID</th>
+                                    <th>Distance</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Last Ping</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {nurseData.map((nurse) => (
+                                    <tr key={nurse.nurse_id}>
+                                        <td>{nurse.nurse_id}</td>
+                                        <td>
+                                            {nurse.distance_meters >= 1000
+                                                ? `${(
+                                                    nurse.distance_meters / 1000
+                                                ).toFixed(2)} km`
+                                                : `${nurse.distance_meters} m`}
+                                        </td>
+                                        <td>
+                                            {nurse.location.coordinates[1]}
+                                        </td>
+                                        <td>
+                                            {nurse.location.coordinates[0]}
+                                        </td>
+                                        <td>
+                                            {new Date(
+                                                nurse.created_at
+                                            ).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </>
+        )}
+    </div>
+)}
+
+
 
         </div>
     );
